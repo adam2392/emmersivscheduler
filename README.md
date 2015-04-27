@@ -1,5 +1,8 @@
 # README #
 
+This repo was written for the purposes of generating summary data based on a unity game json file log and android app json file log. This is used at the West Health Institute's Emmersiv team.
+
+
 ##Setup## 
 Please run pip install -r requirements.txt. This will install all necessary dependencies. 
 
