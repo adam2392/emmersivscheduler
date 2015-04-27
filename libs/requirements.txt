@@ -1,0 +1,4 @@
+watchdog
+pyzmq
+mongoengine
+psutil
