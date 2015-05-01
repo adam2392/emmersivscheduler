@@ -142,29 +142,24 @@ class UnityAppSessionSummary():
 			tempName = self.createTempColl(db, user, sessionId)
 
 			#### query starts: successfully inserted into the db -> now query for end time
-			colltemp = pymongo.collection.Collection(db, tempName)
-			endApp = colltemp.find({"meta._t" : "ShutdownEvent"})
-			timeStamp = endApp.distinct("timestamp")
-
-			# go to second heuristic, if not available
-			if not timeStamp:
-				endApp = colltemp.find({"tag":"application quit"})
-				timeStamp = endApp.distinct("timestamp")
-
-				# if len(endTime) > 1:
-				# 	print "there is more than 1 instance of application quitting!"
-			endTime = timeStamp
-
-			if not endTime:
-				return 'N/A'
-			else:
-				endTime = mktime(endTime[0].timetuple())
-
-			# third heuristic
-			if not timeStamp:
-				endApp = colltemp.find({}).distinct("timestamp")
-				timeStamp = max(endApp)
-				endTime = timeStamp
+			try:
+				colltemp = pymongo.collection.Collection(db, tempName)
+				endApp = colltemp.find({"meta._t" : "ShutdownEvent"})
+				timeStamp = (endApp.distinct("timestamp"))[0]
+			except:
+				# second heuristic
+				try:
+					endApp = colltemp.find({"tag":"application quit"})
+					timeStamp = (endApp.distinct("timestamp"))[0]
+				except:
+					try:
+						# third heuristic
+						endApp = colltemp.find({}).distinct("timestamp")
+						timeStamp = max(endApp)
+					except:
+						print "----> WTF? ", traceback.print_exc() 
+			
+			endTime = mktime(timeStamp.timetuple())
 
 			self.dropTempColl(db, tempName) 
 

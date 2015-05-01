@@ -17,10 +17,11 @@ from libs.lib_assessmentappsessionsummary import AssessmentAppSessionSummary as 
 # Create a class to run your database query code and ensure that the class inherits from DatabaseModule.
 # The DatabaseModule class defines a series of methods that are required to perform and abstract scheduling and
 # running database queries. As well as being able to handle scenarios where modules must be started/restarted or killed.
-class AssessmentScheduledGenSummaries(DatabaseModule):
+class AssessmentScheduledGenSummaries(DatabaseModule):     
     # Define any class specific init requirements. Make sure to call super init on the parent class.
     def __init__(self):
         super(AssessmentScheduledGenSummaries, self).__init__()
+        self.runtime = 1
         self.module_description = "Scheduled queries on assessment app sessions......"
 
     # This method will be called when a module needs to close. Here you can ensure that you finish any operations
@@ -43,8 +44,11 @@ class AssessmentScheduledGenSummaries(DatabaseModule):
     def setup(self):
         super(AssessmentScheduledGenSummaries, self).setup()
         now = dt.datetime.now()
-        # Change delta to schedule every delta periods...
-        delta = dt.timedelta(seconds=5)
+        if self.runtime is 1:
+            delta = dt.timedelta(seconds=5)
+        else:
+            # Change delta to schedule every delta periods...
+            delta = dt.timedelta(seconds=7200)
 
         t = now.time()
         run_time = dt.datetime.combine(now, t) + delta
@@ -59,6 +63,8 @@ class AssessmentScheduledGenSummaries(DatabaseModule):
     def run(self):
         isConnected = False
         debug_on = False
+        if self.runtime is 1:
+            self.runtime = 2
 
         # Try to connect with the mongodb server to the main db: emmersiv
         try:
@@ -130,6 +136,8 @@ class AssessmentScheduledGenSummaries(DatabaseModule):
 
                     # if the session is not in the existing collection -> insert
                     if objectId not in existingSessions:
+                         print 'Running queries on new session ID: ', objectId, ' for sched assessment.'
+
                         # access unityappsessionsummary api to query results of specific user and session
                         summary = myapp.getSessionSummary(db, user, objectId)         
 

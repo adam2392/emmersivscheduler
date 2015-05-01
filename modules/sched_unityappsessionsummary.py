@@ -10,17 +10,16 @@ from models.appsession import AppSession
 from libs.DatabaseModule import DatabaseModule
 from libs.lib_unityappsessionsummary import UnityAppSessionSummary as app
 
-
 # The following class is an example of how you would write your own module to access a database
 
 # Create a class to run your database query code and ensure that the class inherits from DatabaseModule.
 # The DatabaseModule class defines a series of methods that are required to perform and abstract scheduling and
 # running database queries. As well as being able to handle scenarios where modules must be started/restarted or killed.
 class UnityScheduledGenSummaries(DatabaseModule):
-
     # Define any class specific init requirements. Make sure to call super init on the parent class.
     def __init__(self):
         super(UnityScheduledGenSummaries, self).__init__()
+        self.runtime = 1
         self.module_description = "Scheduled queries on unity app sessions......"
 
     # This method will be called when a module needs to close. Here you can ensure that you finish any operations
@@ -43,8 +42,11 @@ class UnityScheduledGenSummaries(DatabaseModule):
     def setup(self):
         super(UnityScheduledGenSummaries, self).setup()
         now = dt.datetime.now()
-        # Change delta to schedule every delta periods...
-        delta = dt.timedelta(seconds=5)
+        if self.runtime is 1:
+            delta = dt.timedelta(seconds=5)
+        else:
+            # Change delta to schedule every delta periods...
+            delta = dt.timedelta(seconds=7200)
 
         t = now.time()
         run_time = dt.datetime.combine(now, t) + delta
@@ -60,6 +62,9 @@ class UnityScheduledGenSummaries(DatabaseModule):
         isConnected = False
         debug_on = False
 
+        if self.runtime is 1:
+            self.runtime = 2
+
         # Try to connect with the mongodb server to the main db: emmersiv
         try:
             conn = pymongo.MongoClient()
@@ -74,6 +79,7 @@ class UnityScheduledGenSummaries(DatabaseModule):
 
         # If connected, read each file in the data directory and dump the data into the DB
         if isConnected == True:
+            print "Creating gameSessionSummary."
             gameSessionSummary = 'gameSessionSummary'
 
             # try to create collection, if it already exists, it will throw an exception
@@ -125,7 +131,9 @@ class UnityScheduledGenSummaries(DatabaseModule):
                         # access unityappsessionsummary api to query results of specific user and session
                         summary = myapp.getSessionSummary(db, user, sessionId)         
 
-                            #collection created, or exists, try to insert into that collection
+                        print 'Running queries on new session ID: ', sessionId, ' for sched unity.'
+
+                        #collection created, or exists, try to insert into that collection
                         try:
                             # insert into the collection, the generated summary
                             coll.insert(summary)
