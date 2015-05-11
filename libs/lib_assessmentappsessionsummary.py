@@ -25,39 +25,38 @@ class MyEncoder(json.JSONEncoder):
 
 class AssessmentAppSessionSummary():
 	# returns number of time user has this sessionId and list of session Ids
-	def numberOfSessions(self, db, userId):
-		try:
-			#connect to the collection 'appsessions' within 'emmersiv' db
-			coll = pymongo.collection.Collection(db, 'appsessions')
+	# def numberOfSessions(self, db, userId):
+		# try:
+		# 	#connect to the collection 'appsessions' within 'emmersiv' db
+		# 	coll = pymongo.collection.Collection(db, 'appsessions')
 
-			# query the db for "application" : assessment
-			assessment = coll.aggregate([
-				{"$match" : 
-					{"application" : "assessment",
-					 "userId" : userId
-					}
-				},
-				{"$group" : 
-					{"_id": "$startTime",
-					 "sessionId" : {"$push" : "$sessionId"}
-					}
-				},
-				{"$sort" : {"_id" : 1}}
-			])
-			result = assessment['result']
+		# 	# query the db for "application" : assessment
+		# 	assessment = coll.aggregate([
+		# 		{"$match" : 
+		# 			{"application" : "assessment",
+		# 			 "userId" : userId
+		# 			}
+		# 		},
+		# 		{"$group" : 
+		# 			{"_id": "$startTime",
+		# 			 "sessionId" : {"$push" : "$sessionId"}
+		# 			}
+		# 		},
+		# 		{"$sort" : {"_id" : 1}}
+		# 	])
+		# 	result = assessment['result']
 
-			sessionCount = len(result)
+		# 	sessionCount = len(result)
 
-			### Debugging Prints ###
-			if debug_on:
-				print "Looking at session id: "
-				print "The number of sessions is: ", sessionCount, "\n\n"
+		# 	### Debugging Prints ###
+		# 	if debug_on:
+		# 		print "Looking at session id: "
+		# 		print "The number of sessions is: ", sessionCount, "\n\n"
 
-			return sessionCount
-		except:
-			print "----> WTF? ", traceback.print_exc() 
-			return "error"
-
+		# 	return sessionCount
+		# except:
+		# 	print "----> WTF? ", traceback.print_exc() 
+		# 	return "error"
 	def getSessionId(self, db, userId, objectId):
 		try:
 			#connect to the collection 'appsessions' within 'emmersiv' db
@@ -71,7 +70,7 @@ class AssessmentAppSessionSummary():
 				print "Looking at user: ", userId, " for user sessionId: ", sessionId
 			
 			if not sessionId:
-				return 'N/A'	
+				return 'null'	
 
 			return sessionId[0]
 		except:
@@ -274,52 +273,25 @@ class AssessmentAppSessionSummary():
 
 
 	def getSessionSummary(self, db, uid, oid):
-		listSummary = []	# list of sessions summaries
-
 		# list of tuples of (_id, _question, _answer)
-		listOfQuestions = [
-			(0, "What is sessionId:", self.getSessionId),
-			(1, "What date/time did the session start?", self.sessionStart),
-			(2, "What date/time did the session end?", self.sessionEnd),
-			(3, "What was the duration of the session?", self.sessionDuration),
-			(4, "What was the summary of the Q&A?", self.summaryQA)
-		]
-
-		errorList = []
-		for (_id, _question, _method) in listOfQuestions:
-			if _id is 3:	#session duration
-				result = {
-						"id": _id,
-						"question": _question,
-						"result": _method(self.sessionStart(db, uid, oid), self.sessionEnd(db, uid, oid))
-					 }
-			else:
-				result = {
-						"id": _id,
-						"question": _question,
-						"result": _method(db, uid, oid)
-					 }
-
-			if not result["result"]:
-				result["result"] = "NULL"
-
-			# append a list of error questions to error log
-			if "error" in str(result["result"]):
-				errorList.append(result["id"])
-
-			listSummary.append(result)
-
-		# generate an error document to insert into the response
-		errorResult = {
-			"id": "Errors",
-			"question": "Which questions produced errors?",
-			"result": errorList
+		listOfQuestions = {
+			"sessionId": self.getSessionId(db, uid, oid),
+			"startTime": self.sessionStart(db, uid, oid),
+			"stopTime": self.sessionEnd(db, uid, oid),
+			"duration": self.sessionDuration(self.sessionStart(db, uid, oid), self.sessionEnd(db, uid, oid)),
+			"qna": self.summaryQA(db, uid, oid)
 		}
-		listSummary.append(errorResult)
+
+		# create the final response json object to return
+		response = {"userId" : uid,
+					"sessionId" : self.getSessionId(db, uid, oid),
+					"application" : "eventlog",
+					"summary" : listOfQuestions
+				   }
 
 		# print response
 		# print json.dumps(response, cls = MyEncoder, sort_keys=True)
-		return listSummary
+		return listOfQuestions
 
 '''Run the main script...
 runs overall Function

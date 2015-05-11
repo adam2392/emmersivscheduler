@@ -115,18 +115,14 @@ class AssessmentScheduledGenSummaries(DatabaseModule):
                 objectIds = myapp.getObjectIds(db, user)
 
                 # Now get a list of object Ids already within the collection 'game session'
-                existingSession = coll.find(assessmentquery).distinct("_id")
-                existingSessions = []
-                for session in existingSession:
-                    existingSessions.append(session)
-
-
-                #initialize list summary to store all the results of a certain user
-                listSummary = []
+                existingObjectID = coll.find(assessmentquery).distinct("_id")
+                existingObjectIds = []
+                for session in existingObjectID:
+                    existingObjectIds.append(session)
 
                 if debug_on:
                     print 'Running queries on ', user
-                    print 'existing sessions from start: ', existingSessions, '\n'
+                    print 'existing sessions from start: ', existingObjectIds, '\n'
                 
                 for objectId in objectIds:
 
@@ -135,50 +131,42 @@ class AssessmentScheduledGenSummaries(DatabaseModule):
                         print 'Running queries on new session ID: ', ObjectId(objectId)
 
                     # if the session is not in the existing collection -> insert
-                    if objectId not in existingSessions:
-                         print 'Running queries on new session ID: ', objectId, ' for sched assessment.'
+                    if objectId not in existingObjectIds:
+                        print 'Running queries on new session ID: ', objectId, ' for sched assessment.'
 
                         # access unityappsessionsummary api to query results of specific user and session
                         summary = myapp.getSessionSummary(db, user, objectId)         
 
-                        listSummary.append(summary)
-                    elif debug_on:
-                        print objectId, " already exists \n"
-                
-                
-                #end for sessionId
-                sessionCount = myapp.numberOfSessions(db, user)
-
-                # build the response JSON object
-                response = {"userId" : user,
+                        # build the response JSON object
+                        response = {"userId" : user,
                             "_id" : objectId,
+                            "sessionId" : myapp.getSessionId(db, user, objectId),
                             "application" : "assessment",
-                            "sessionCount" : sessionCount,
-                            "sessionSummaries" : listSummary
+                            "sessionSummaries" : summary
                            }
 
-                #collection created, or exists, try to insert into that collection
-                try:
-                    # insert into the collection, the generated summary
-                    coll.insert(response)
-                    
-                    if debug_on:
-                        print "Insertion finished for ", user, ' and session: ', objectId
+                        #collection created, or exists, try to insert into that collection
+                        try:
+                            # insert into the collection, the generated summary
+                            coll.insert(response)
+                            
+                            if debug_on:
+                                print "Insertion finished for ", user, ' and session: ', objectId
 
-                #exceptions for inserting into the temporary collection 
-                except pymongo.errors.OperationFailure:
-                    if debug_on:
-                        print user, " already in there"
-                        # print "----> OP failed"
-                except pymongo.errors.InvalidName:
-                        print "----> Invalid Name"
-                except:
-                        print "----> WTF? ", traceback.print_exc() 
-                # count = count + 1
+                        #exceptions for inserting into the temporary collection 
+                        except pymongo.errors.OperationFailure:
+                            if debug_on:
+                                print user, " already in there"
+                                # print "----> OP failed"
+                        except pymongo.errors.InvalidName:
+                                print "----> Invalid Name"
+                        except:
+                                print "----> WTF? ", traceback.print_exc() 
 
-                # if count is 3:
-                #     break
-            #end for user
+                    elif debug_on:
+                        print objectId, " already exists \n"
+                #end of for objectId in objectIds
+            #end of for user
 
         if __name__ == '__main__':
             self.close()

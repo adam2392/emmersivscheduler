@@ -1,6 +1,7 @@
 __author__ = 'Adam Li'
 import datetime as dt
 import sys
+import traceback
 import pymongo
 import json
 

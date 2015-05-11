@@ -12,6 +12,8 @@ __author__ = "adamli"
 import datetime
 import pymongo
 import json
+import sys
+import traceback
 from time import mktime
 from bson import json_util
 debug_on = False
@@ -119,6 +121,7 @@ class UnityAppSessionSummary():
 			
 			# print startTime
 			if not startTime:
+				print "N/A at start for ", sessionId, user
 				return 'N/A'
 			else:
 				startTime = mktime(startTime[0].timetuple())
@@ -207,7 +210,7 @@ class UnityAppSessionSummary():
 				print "Calibration angle: ", calibAngle, "\n\n"
 			
 			if not calibAngle:
-				return 'N/A'
+				return 'null'
 			else:
 				return calibAngle[0]
 		except:
@@ -235,7 +238,7 @@ class UnityAppSessionSummary():
 				print "Entering arcade elapsed timestamp: ", elapsed, "\n\n"
 
 			if not elapsed:
-				return 'N/A'
+				return 'null'
 			else:
 				return elapsed[0]
 		except:
@@ -250,7 +253,7 @@ class UnityAppSessionSummary():
 			#### query starts: successfully inserted into the db 
 			colltemp = pymongo.collection.Collection(db, tempName)
 			peerInstruction = colltemp.find({"meta._t" : "WatchPeerInstruction"})
-			elapsed = peerInstruction.distinct("meta.elapsed")
+			# elapsed = peerInstruction.distinct("meta.elapsed")
 			instructionId = peerInstruction.distinct("meta.peerInstructionID")
 
 			if len(elapsed) > 1 or len(instructionId) > 1:
@@ -259,9 +262,9 @@ class UnityAppSessionSummary():
 			self.dropTempColl(db, tempName)
 
 			if not instructionId:
-				return 'N/A'
+				return 'null'
 			else:
-				peerModuleTuple = str((instructionId[0], elapsed[0])).strip('[]')
+				peerModule = instructionId[0]
 
 			### Debugging Prints ###
 			if debug_on:
@@ -269,38 +272,40 @@ class UnityAppSessionSummary():
 				print "Peer Instruction ID: ", instructionId
 				print "Peer module instruction elapsed timestamp: ", elapsed, "\n\n"
 
-			return peerModuleTuple 
+			return peerModule
 		except:
 			return "error"
 
 	# Find out which games user attmpted to play
-	def sessionGamesAttempt(self, db, user, sessionId):
+	def sessionGamesPlayed(self, db, user, sessionId):
 		try:
 			#create temporary collection 		
 			tempName = self.createTempColl(db, user, sessionId)
 					
 			#### query starts: successfully inserted into the db 
 			colltemp = pymongo.collection.Collection(db, tempName)
-			eventGame = colltemp.aggregate([
+
+			miniGame = colltemp.aggregate([
 				{"$match" : 
-					{"meta._t" : "GameSelectionEvent"}
+					{"meta._t" : "GamePlayEvent"}
 				},
 				{"$group" : 
-					{"_id":"$timestamp",
-					 "game": {"$push" : "$meta.game"}
+					{"_id":"$timestamp", 
+					 "duration" : {"$push" : "$meta.elapsed"},
+					 "game" : {"$push" : "$meta.game"}
 					}
 				},
 				{"$sort" : {"_id" : 1}}
 				])
-			gameList = eventGame['result']
 
-			gamesAttempted = []
+			gameList = miniGame['result']
 
-			# loop through gameList and append games (to get rid of _id)
-			for game in gameList:
-				gamesAttempted.append(str(game["game"]).strip('[]'))
-
-			# gamesAttempted = str(gamesAttempted).strip('[]')
+			for i in range(0, len(gameList)):
+				result = gameList[i]
+				gameList[i] = {
+					"game" : result["game"],
+					"duration" : result["duration"]
+				}
 
 			self.dropTempColl(db, tempName)
 
@@ -309,101 +314,55 @@ class UnityAppSessionSummary():
 				print "Looking at session id: ", sessionId
 				print "The games played are: ", gameList, "\n\n"
 
-			return gamesAttempted
+			if not gameList:
+				return "null"
+
+			return gameList
 		except:
 			return "error"
 
-	# Find out how much time spent waiting for game in line
-	def sessionGameWait(self, db, user, sessionId):
+	# Find out line wait info for each game
+	def sessionLineWait(self, db, user, sessionId):
 		try:
 			#create temporary collection 		
 			tempName = self.createTempColl(db, user, sessionId)
 					
 			#### query starts: successfully inserted into the db 
 			colltemp = pymongo.collection.Collection(db, tempName)
+
 			lineWait = colltemp.aggregate([
 				{"$match" : 
 					{"meta._t" : "LineWaitEvent"}
 				},
 				{"$group" : 
 					{"_id":"$timestamp", 
-					 "elapsed" : {"$push": "$meta.elapsed"},
-					 "game": {"$push" : "$meta.game"}
+					 "duration" : {"$push": "$meta.elapsed"},
+					 "game": {"$push" : "$meta.game"},
+					 "successful": {"$push" : "$meta.successful"},
+					 "length" : {"$push" : "$meta.lineLength"}
 					}
 				},
 				{"$sort" : {"_id" : 1}
 				}
 				])
 
-			gameWaitTuple = lineWait["result"]
+			lineInfo = lineWait['result']
 
-			gamesWait = []
-
-			# loop through gameList and append games (to get rid of _id)
-			for game in gameWaitTuple:
-				if len(game["elapsed"]) > 1:
-					print game["elapsed"]
-					print "Error game wait session!"
-				waitTup = (game["game"][0], game["elapsed"][0])
-				gamesWait.append(waitTup)
-
-			gamesWait = str(gamesWait).strip('[]')
+			for i in range(0, len(lineInfo)):
+				result = lineInfo[i]
+				lineInfo[i] = {
+					"game" : result["game"],
+					"duration" : result["duration"],
+					"length" : result["length"], 
+					"successful" : result["successful"]
+				}
 
 			self.dropTempColl(db, tempName)
-			
-			### Debugging Prints ###
-			if debug_on:
-				print "Looking at session id: ", sessionId
-				print "The games played are: ", lineWait, "\n\n"
 
-			return gamesWait
-		except:
-			return "error"
+			if not lineInfo:
+				return "null"
 
-	# Find out hhow long each mini game was played for
-	def sessionMiniGameDuration(self, db, user, sessionId):
-		try:
-			#create temporary collection 		
-			tempName = self.createTempColl(db, user, sessionId)
-			
-			#### query starts: successfully inserted into the db 
-			colltemp = pymongo.collection.Collection(db, tempName)
-			miniGame = colltemp.aggregate([
-				{"$match" : 
-					{"meta._t" : "GamePlayEvent"}
-				},
-				{"$group" : 
-					{"_id":"$timestamp", 
-					 "elapsed" : {"$push" : "$meta.elapsed"},
-					 "game" : {"$push" : "$meta.game"}
-					}
-				},
-				{"$sort" : {"_id" : 1}}
-				])
-
-			miniGameTuple = miniGame["result"]
-
-			# initialize list and indicing variable
-			miniGame = []
-
-			#loop through results and extract id and elapsed
-			for game in miniGameTuple:
-				if len(game["elapsed"]) > 1:
-					print "Error mini game duration!"
-				
-				gameTup = (game["game"], game["elapsed"][0])
-				miniGame.append(gameTup)
-
-			miniGame = str(miniGame).strip('[]')
-
-			self.dropTempColl(db, tempName)
-			
-			### Debugging Prints ###
-			if debug_on:
-				print "Looking at session id: ", sessionId
-				print "The games played are: ", miniGameTuple, "\n\n"
-
-			return miniGame
+			return lineInfo
 		except:
 			return "error"
 
@@ -430,14 +389,13 @@ class UnityAppSessionSummary():
 
 			sceneTuple = socialScene["result"]
 
-			scenes = []
+			for i in range(0, len(sceneTuple)):
+				result = sceneTuple[i]
+				sceneTuple[i] = {
+					"sceneId" : result["scene"],
+					"duration" : result["elapsed"],
+				}
 
-			# loop through result and add necessary fields
-			for scene in sceneTuple:
-				sceneTup = (scene["scene"][0], scene["elapsed"][0])
-				scenes.append(sceneTup)
-
-			scenes = str(scenes).strip('[]')
 
 			self.dropTempColl(db, tempName)	
 
@@ -446,51 +404,10 @@ class UnityAppSessionSummary():
 				print "Looking at session id: ", sessionId
 				print "The scenes shown and how long are: ", sceneTuple, "\n\n"
 
-			return scenes
-		except:
-			return "error"
+			if not sceneTuple:
+				return "null"
 
-
-	# Find out which questions were presented during the session
-	def sessionQuestions(self, db, user, sessionId):
-		try:	
-			#create temporary collection 		
-			tempName = self.createTempColl(db, user, sessionId)
-
-			questionIds = []
-
-			#### query starts: successfully inserted into the db 
-			colltemp = pymongo.collection.Collection(db, tempName)
-			captureEvent = colltemp.find({"tag":"startcaptureevent"})
-			questions = captureEvent.distinct("eventType")
-
-			# find the question Ids
-			for question in questions:
-				# this is a question event...
-				if "Question" in question:
-					# variables to control looping through meta data
-					index = 0
-					firstFound = 0
-					startcomma = 0
-					endcomma = 0
-
-					# find the commas (the question ids are between commas)
-					startcomma = question.index(",")
-					endcomma = question.index(",", startcomma+1)
-
-					questionIds.append(question[startcomma+2:endcomma])
-
-			questionIds = str(questionIds).strip('[]')
-
-			self.dropTempColl(db, tempName)
-
-			### Debugging Prints ###
-			if debug_on:
-				print "Looking at session id: ", sessionId
-				print "The question Ids are: ", questionIds, "\n\n"
-
-			return questionIds
-
+			return sceneTuple
 		except:
 			return "error"
 
@@ -527,108 +444,12 @@ class UnityAppSessionSummary():
 				print "Looking at session id: ", sessionId
 				print "The question responses are: ", responses, "\n\n"
 
+			if not responses:
+				return "null"
+
 			return responses
 		except:
 			return "error"
-
-	# Find out many times line wait was canceled
-	def sessionLineWaitCancel(self, db, user, sessionId):
-		try:
-			#create temporary collection 		
-			tempName = self.createTempColl(db, user, sessionId)
-
-			#### query starts: successfully inserted into the db 
-			colltemp = pymongo.collection.Collection(db, tempName)
-			responseEvent = colltemp.aggregate([					
-				{"$match" : 
-					{"meta._t" : "LineWaitEvent", "meta.successful" : False}
-				},
-				{"$group" : 
-					{"_id":"$timestamp", 
-					 "line length" : {"$push" : "$meta.lineLength"},
-					 "game" : {"$push" : "$meta.game"}
-					}
-				},
-				{"$sort" : {"_id" : 1}
-				}
-			])
-			lineTuple = responseEvent["result"]
-
-			lineWait = []
-
-			# loop through result and add necessary fields
-			for line in lineTuple:
-				waitTup = (line["game"][0], line["line length"][0])
-				lineWait.append(waitTup)
-
-			lineWait = str(lineWait).strip('[]')
-
-			self.dropTempColl(db, tempName)
-			
-			### Debugging Prints ###
-			if debug_on:
-				print "Looking at session id: ", sessionId
-				print "The line wait for games and length are: ", lineTuple, "\n\n"
-
-			return lineWait
-		except:
-			return "error"
-
-	# Find skeletal information between two time points
-	def sessionSkeleton(self, db, user, time01, time02, sessionId):
-		try:
-			#create temporary collection 		
-			tempName = self.createTempColl(db, user, sessionId)
-
-			#### query starts: successfully inserted into the db -> now query for start time
-			colltemp = pymongo.collection.Collection(db, tempName)
-			# timestamps = colltemp.find({"meta._t" : "SkeletonJoints"}).distinct("timestamp").sort()
-			# timestamps = sorted(i for i in timestamps if i >= time01 and i <= time02)
-			# print timestamps
-
-			skeletonJoints = colltemp.aggregate([					
-				{"$match" : 
-					{"meta._t" : "SkeletonJoints", "timestamp" : {"$gte" : time01, "$lte" : time02}}
-				},
-				{"$group" : 
-					{"_id":"$timestamp", 
-					 "hipLeft" : {"$addToSet" : "$meta.hipLeft"}, 
-					 "kneeLeft"	: {"$addToSet" : "$meta.kneeLeft"},
-					 "ankleLeft" : {"$addToSet" : "$meta.ankleLeft"},
-					 "hipRight"	: {"$addToSet" : "$meta.hipRight"},
-					 "kneeRight" : {"$addToSet" : "$meta.kneeRight"},
-					 "ankleRight" : {"$addToSet" : "$meta.ankleRight"},
-					 "hipCenter" : {"$addToSet" : "$meta.hipCenter"},
-					 "shoulderCenter" : {"$addToSet" : "$meta.shouldCenter"},
-					 "head"	: {"$addToSet" : "$meta.head"},
-					 "spine" : {"$addToSet" : "$meta.spine"},
-					 "shoulderLeft"	: {"$addToSet" : "$meta.shouldLeft"},
-					 "shoulderRight" : {"$addToSet" : "$meta.shouldRight"},
-					 "elbowLeft" : {"$addToSet" : "$meta.elbowLeft"},
-					 "elbowRight" : {"$addToSet" : "$meta.elbowRight"},
-					 "wristLeft" : {"$addToSet" : "$meta.wristLeft"},
-					 "wristRight" : {"$addToSet" : "$meta.wristRight"},
-					 "footLeft"	: {"$addToSet" : "$meta.footLeft"},		
-					 "footRight" : {"$addToSet" : "$meta.footRight"},
-					 "handLeft"	: {"$addToSet" : "$meta.handLeft"},		
-					 "handRight" : {"$addToSet" : "$meta.handRight"}
-					}
-				},
-				{"$sort" : {"_id" : 1}},
-			])
-			skeletonCoords = skeletonJoints["result"]
-
-			self.dropTempColl(db, tempName)
-			
-			### Debugging Prints ###
-			if debug_on:
-				print "Looking at session id: ", sessionId, " examining skeleton joints."
-				#print "The line wait for games and length are: ", lineTuple, "\n\n"
-
-			return skeletonCoords	
-		except:
-			return "error"
-
 
 	# Find out how much time spent trying to open arcade door
 	def sessionSocialSceneSkips(self, db, user, sessionId):
@@ -668,6 +489,9 @@ class UnityAppSessionSummary():
 				print "Looking at session id: ", sessionId
 				print "The scene numbers which were skipped are: ", sceneIds, "\n\n"
 
+			if not sceneSkip:
+				return "null"
+
 			return sceneSkip
 		except:
 			return "error"
@@ -692,6 +516,9 @@ class UnityAppSessionSummary():
 				print "Looking at session id: ", sessionId
 				print "The player initiated shutdown is: ", shutdown, "\n\n"
 
+			if not shutdown:
+				return False
+
 			return shutdown
 		except:
 			return "error"
@@ -709,89 +536,93 @@ class UnityAppSessionSummary():
 
 			self.dropTempColl(db, tempName)  
 			
-			### Debugging Prints ###
+			### Debugging Prints ###.
 			if debug_on:
 				print "Looking at session id: ", sessionId
 				print "The session data summary is: ", sessionData, "\n\n"
+
+			if not sessionData:
+				return "null"
 
 			return sessionData
 		
 		except:
 			return "error"
 
+	def sessionKinectError(self, db, user, sessionId):
+		try:
+			# create temporary collection
+			tempName = self.createTempColl(db, user, sessionId)
 
-	def getSessionSummary(self, db, uid, sid, t01=0, t02=0):
-		listSummary = []	# list of sessions summaries
+			#### query starts: successfully inserted into the db -> now query for start time
+			colltemp = pymongo.collection.Collection(db, tempName)
+			kinectErrorEvent = colltemp.find({"tag": "kinecterrorevent"})
+			kinectError = kinectErrorEvent.distinct("timestamp")
 
-		# list of tuples of (_id, _question, _answer)
-		listOfQuestions = [
-			(1, "What date/time did the session start?", self.sessionStart),
-			(2, "What date/time did the session end?", self.sessionEnd),
-			(3, "What was the duration of the session?", self.sessionDuration),
-			(4, "What was the calibration angle of the sensor?", self.sessionCalibrationAngle),
-			(5, "How much time was spent trying to open the arcade door?", self.sessionEnterArcadeTime),
-			(6, "Which peer instruction module was played? How long did it last?", self.sessionPeerInstruction),
-			(7, "Which games did the user attempt to play?", self.sessionGamesAttempt),
-			(8, "For each play, how long did the user have to wait in line?", self.sessionGameWait),
-			(9, "For each mini game played, what was duration of play?", self.sessionMiniGameDuration),
-			(10, "Which social vignettes did the user watch during the session? How long did each last?", self.sessionSocialScene),
-			(11, "Which questions were presented to the user during this session?", self.sessionQuestions),
-			(12, "How did the user respond to each of the questions presented?", self.sessionQuestionResponse),
-			(13, "How many times did the user cancel waiting in line? For which games? What was the line length?", self.sessionLineWaitCancel),
-			(14, "Grab skeleton frames between t1 and t2.", self.sessionSkeleton),
-			(15, "Did the user skip the playback of the social vignette during remediation? Which vignette?", self.sessionSocialSceneSkips),
-			(16, "Did the player initiate a shutdown of the app during the session?", self.sessionPlayerShutdown),
-			(17, "The session summary object?", self.sessionSummary)
-		]
-
-		errorList = []
-		for (_id, _question, _method) in listOfQuestions:
-			if _id is 14: #session skeleton
-				result = {
-						"id": _id,
-						"question": _question,
-						"result": _method(db, uid, t01, t02, sid)
-					 }
-			elif _id is 3:	#session duration
-				result = {
-						"id": _id,
-						"question": _question,
-						"result": _method(self.sessionStart(db, uid, sid), self.sessionEnd(db, uid, sid))
-					 }
+			if len(kinectError) > 0:
+				result = True
 			else:
-				result = {
-						"id": _id,
-						"question": _question,
-						"result": _method(db, uid, sid)
-					 }
+				result = False
 
-			if result["result"] is 0:
-				result["result"] = 0
-			elif not result["result"]:
-				result["result"] = "NULL"
+			self.dropTempColl(db, tempName)  
 
-			# append a list of error questions to error log
-			if "error" in str(result["result"]):
-				errorList.append(result["id"])
+			return result
+		
+		except:
+			print "kinect error ", traceback.print_exc() 
+			return "error"
 
-			listSummary.append(result)
+	def sessionPause(self, db, user, sessionId):
+		try:
+			# create temporary collection
+			tempName = self.createTempColl(db, user, sessionId)
 
-		# generate an error document to insert into the response
-		errorResult = {
-			"id": "Errors",
-			"question": "Which questions produced errors?",
-			"result": errorList
+			#### query starts: successfully inserted into the db -> now query for start time
+			colltemp = pymongo.collection.Collection(db, tempName)
+			pauseEvent = colltemp.find({"meta._t": "PauseEvent"})
+			totalPause = pauseEvent.distinct("meta.totalPauseTime")
+
+			self.dropTempColl(db, tempName)  
+
+			if not totalPause:
+				return "null"
+
+			return totalPause
+		except:
+			print "session Pause, ", traceback.print_exc() 
+			return "error"
+
+	def getSessionSummary(self, db, uid, sid):
+		# list of tuples of (_id, _question, _answer)
+		listOfQuestions = {
+			"sessionId": sid,
+			"startTime": self.sessionStart(db, uid, sid),
+			"stopTime": self.sessionEnd(db, uid, sid),
+			"duration": self.sessionDuration(self.sessionStart(db, uid, sid), self.sessionEnd(db, uid, sid)),
+			"angle": self.sessionCalibrationAngle(db, uid, sid),
+			"elapsedArcadeDoor": self.sessionEnterArcadeTime(db, uid, sid),
+			"peerInstruction": self.sessionPeerInstruction(db, uid, sid),
+			"gamesPlayed": self.sessionGamesPlayed(db, uid, sid),
+			"lineWait": self.sessionLineWait(db, uid, sid),
+			"socialVignettes": self.sessionSocialScene(db, uid, sid),
+			"qna": self.sessionQuestionResponse(db, uid, sid),
+			"skippedPlayback": self.sessionSocialSceneSkips(db, uid, sid),
+			"userShutdown": self.sessionPlayerShutdown(db, uid, sid),
+			"sessionSummary": self.sessionSummary(db, uid, sid),
+			"kinectError": self.sessionKinectError(db, uid, sid),
+			"pauseTimes": self.sessionPause(db, uid, sid)
 		}
-		listSummary.append(errorResult)
+
 		
 		# create the final response json object to return
 		response = {"userId" : uid,
 					"sessionId" : sid,
 					"application" : "eventlog",
-					"summary" : listSummary
+					"summary" : listOfQuestions
 				   }
+		
+		# response = json.dumps(response, cls = MyEncoder)
 		# print response
-		# print json.dumps(response, cls = MyEncoder)
 		return response
 
 
@@ -815,10 +646,11 @@ if __name__ == '__main__':
 	if isConnected == True:
 		user = raw_input("Please enter in the username: ")
 		sessionId = raw_input("Please enter in the sessionId: ")
-		time01 = raw_input("Please enter in the first timeStamp: ")
-		time02 = raw_input("Please enter in the second timeStamp: ")
 
 		#create instance of the class
+		user = 'ALZA'
 		app = UnityAppSessionSummary()
+		sessions = app.getSessionIds(db, user)
 
-		sessionSummary = app.getSessionSummary(db, user, sessionId, time01, time02)
+		for session in sessions:
+			sessionSummary = app.getSessionSummary(db, user, session)
