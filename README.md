@@ -27,6 +27,6 @@ this module does not lock files. Please allow a few seconds after a file inserti
 ##Functionality##
 Running FileWatcher will automatically call on sched_unityappsummary and sched_assessmentappsummary and usersessionsummary.py, which use corresponding files in the lib folder. These will constantly update the MongoDB database with data entries from the clinical team. The usersessionsummary_alltextgenerator.py will be used to generate text summary file. Otherwise the usersessionsummary script will update a third collection within the MongoDB that can be connected to the web app.
 
-See https://github.com/adam2392/Analytics_Pymongo for some scripts on analyzing behavior during the space and zombie games.
-See https://github.com/adam2392/emmersiv_webappcharts for the front end display of all the data using highCharts.
+* See https://github.com/adam2392/Analytics_Pymongo for some scripts on analyzing behavior during the space and zombie games.
+* See https://github.com/adam2392/emmersiv_webappcharts for the front end display of all the data using highCharts.
 
