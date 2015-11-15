@@ -1,0 +1,142 @@
+#!/usr/bin/env python
+""" Python Algorithm to Filter Names and calculate duration of play
+@author Written By: Adam Li
+
+@Brief : These python modules will 
+	1. connect to the emmersiv db
+	2. get all the distinct usernames
+	3. filter and calculate duration of play for each user
+
+Filtered by username.
+
+"""
+
+#Import modules needed
+import os, pymongo, json, sys
+from datetime import datetime
+
+conn = None
+db = None
+isConnected = False
+
+#try connecting with mongodb server
+try:
+	conn = pymongo.MongoClient()
+	db = conn.emmersiv				#connect to the emmersiv db
+	print db.collection_names() 	#print the collection of files within emmersiv db
+	print "Connected to the MongoDB server"
+	isConnected = True
+except:
+	print "Connection Failed..."
+
+#now that emmersiv db is connected, read a file, prompt user for filename
+if isConnected == True:
+
+	''' Option 1: get all collections in list'''
+	#get all collections in a list and then remove non user data
+	allUsers = db.collection_names()	
+
+	filterOut = ["alldata", "system.indexes"];
+	for trash in filterOut:
+		allUsers.remove(trash)
+
+	'''Duration of game play'''
+	#loop through all distinct users
+	for users in allUsers:
+		#get the current collection of that users
+		coll = pymongo.collection.Collection(db, users.lower())
+
+		print "Currently looking at", users.lower()
+
+		#get all distinct SON time/date on that certain user -> sort
+		userTime = coll.distinct('Timestamp')
+		
+		if len(userTime) > 0:
+			userTime.sort()
+
+			#convert unix to local time
+			begin = userTime[1]
+			end = userTime[len(userTime)-1]
+
+			duration = (end - begin) / 3600
+
+			userTime[:] = []
+			print duration
+
+	''' Zombie vs Space Game '''
+	for users in allUsers:
+		coll = pymongo.collection.Collection(db, users.lower())
+		print "Currently looking at", users.lower(), " to analyze zombie and space game"
+
+		#Determining how long a user spent in zombie vs space game
+		allGames = coll.distinct('Tag')
+
+		#print "This is the list of different Tags that occured:", allGames
+
+		#find zombie and Timestamp using collections and distinct
+		zombieGames = coll.find({"Tag" : "zombiegame"})
+		zombieTime = list(zombieGames.distinct('Timestamp'))
+		
+		spaceGames = coll.find({"Tag" : "endlessgame"})
+		spaceTime = list(spaceGames.distinct('Timestamp'))
+
+		#check if the user even played zombie games, or space games
+		if len(zombieTime) > 0: 
+			#sort time and get beginning and end
+			zombieTime.sort()
+			begin = zombieTime[0]
+			end = zombieTime[len(userTime)-1]
+
+			#calculate duration of game play in hours
+			duration = (end - begin) / 3600
+
+			print duration
+
+			zombieTime[:] = []
+		if len(spaceTime) > 0:
+			#sort time and get beginning and end
+			spaceTime.sort()
+			begin = spaceTime[0]
+			end = spaceTime[len(userTime)-1]
+
+			#calculate duration of game play in hours
+			duration = (end - begin) / 3600
+			print duration
+
+			spaceTime[:] = []
+
+	'''Filtering Kinect Data By Username'''
+	for users in allUsers:
+		coll = pymongo.collection.Collection(db, users.lower())
+		print "Currently looking at", users.lower(), " to filter kinect data"
+
+		#find all skeletal data and convert to a list
+		kinectData = list(coll.find({"Meta._t": "SkeletonJoints"}))
+		newCollName = users.lower() + "_kinectData"	#name of the new collection to be made
+
+		#try to create and insert all kinect data into a new collection
+		try:
+			#iterate through all collected kinect data
+			for line in kinectData:
+				#check that line is not empty
+				if line is not None:
+					#create collection 
+					db.create_collection(newCollName)
+
+					newColl = pymongo.collection.Collection(db, newCollName)
+
+					#and insert JSON documents
+					newColl.insert(line)
+
+					print "Insertion finished for ", newCollName
+		
+			print "No Insertion for ", newCollName
+		
+		except pymongo.errors.CollectionInvalid:
+			print 'Collection ', newCollName, ' already exists'
+		except pymongo.errors.OperationFailure:
+			print "----> OP insertion failed"
+		except pymongo.errors.InvalidName:
+			print "----> Invalid insertion Name"
+		except:
+			print "----> WTF? ", traceback.print_exc() 

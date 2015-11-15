@@ -1,0 +1,66 @@
+#!/usr/bin/env python
+
+""" Python Algorithm to Filter Names and Store in MongoDB
+@author Written By: Adam Li
+
+@Brief : These python modules will 
+	1. connect to the emmersiv db
+	2. get all the distinct usernames
+	3. filter and create collections within 'emmersiv' for each username
+
+Filtered by username.
+
+"""
+
+
+#Import modules needed
+import os, pymongo, json, sys, traceback
+
+conn = None
+db = None
+isConnected = False
+
+#try connecting with mongodb server
+try:
+	conn = pymongo.MongoClient()
+	db = conn.emmersiv				#connect to the emmersiv db
+	print db.collection_names() 	#print the collection of files within emmersiv db
+	print "Connected to the MongoDB server"
+	isConnected = True
+except:
+	print "Connection Failed..."
+
+#now that emmersiv db is connected, read a file, prompt user for filename
+if isConnected == True:
+	
+	#try oquerying db for distinct userId's
+	try:
+		allUsers = db.alldata.distinct('userId')
+	except:
+		print "Can't query db for userId"
+
+	#loop through all distinct users
+	for users in allUsers:
+		print "Currently looking at ", users
+
+		#get JSON data on that certain user
+		userDocs = list(db.alldata.find({'userId':  users}))
+		
+		#try to create a collection with name 'users'
+		try:
+			db.create_collection(users)
+			print 'Creating collection', users, '---> OK'
+		except pymongo.errors.CollectionInvalid:
+			print 'Collection ', users, ' already exists'
+
+		#collection created, or exists, try to insert into that collection
+		try:
+			coll = pymongo.collection.Collection(db, users)
+			for doc in userDocs:
+				coll.insert({"message":"blank"})
+		except pymongo.errors.OperationFailure:
+				print "----> OP failed"
+		except pymongo.errors.InvalidName:
+				print "----> Invalid Name"
+		except:
+				print "----> WTF? ", traceback.print_exc() 

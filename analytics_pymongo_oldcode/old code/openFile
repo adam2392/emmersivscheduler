@@ -1,0 +1,47 @@
+#!/usr/bin/env python
+
+""" Python Algorithms
+@author Written By: Adam Li
+
+@Brief : These python modules will open and filter the game data collected
+at the West Health Institute. 
+
+@Output : Various metrics and analytics related to children's game play data.
+Used in a clinical setting.
+"""
+#Import modules needed
+import os
+
+#Build the filename and import game data
+filename = os.getcwd() + "\gamedata.txt"
+try:
+	file_game = open(filename, 'r')
+except:
+	print ("This is an error. Check filename!")
+
+#get a list of all the lines in text file
+#lines = file_game.readlines()
+
+line = file_game.readline() #get the first line
+
+userID = "Milan" #desired user ID
+
+filteredUsers = [] #list to hold the userID events
+
+index = 0
+fetchedLine = 0
+
+while line:
+	#if line contains filtered word, flag it
+	if userID in line:
+		filteredUsers.append(line)
+		fetchedLine += 1
+
+	line = file_game.readline() #get the next line
+	index += 1
+
+print(*filteredUsers, sep='\n')
+print("The number of total lines are: " + str(index))
+print("The number of emmersiv events are: " + str(fetchedLine))
+#close the file after usage
+file_game.close()

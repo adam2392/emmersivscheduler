@@ -1,0 +1,5 @@
+Testing adam_good01 vs adam_bad01 for: 07/11/2014,User,prioritization %,deliberate hit %,good_hits,good_shots,total_good (after weight),total_shots
+,adam_bad01,0.6842,0.3065,ghits,gshots,tgood,tshots
+,adam_good01,1.0,0.5313,ghits,gshots,tgood,tshots
+,Hit_Weight,Shot_Weight
+,weight_hit,weight_shot

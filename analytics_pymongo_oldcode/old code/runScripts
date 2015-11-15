@@ -1,0 +1,121 @@
+#!/usr/bin/env python
+""" Python Algorithm to Filter Names and calculate duration of play
+@author Written By: Adam Li
+
+@Brief : These python modules will 
+	1. connect to the emmersiv db
+	2. get all the distinct usernames
+	3. filter and calculate duration of play for each user
+
+Filtered by username.
+
+"""
+#Import modules needed
+import os, pymongo, json
+from datetime import datetime
+
+conn = None
+db = None
+isConnected = False
+
+#try connecting with mongodb server
+try:
+	conn = pymongo.MongoClient()
+	db = conn.emmersiv				#connect to the emmersiv db
+	print db.collection_names() 	#print the collection of files within emmersiv db
+	print "Connected to the MongoDB server"
+	isConnected = True
+except:
+	print "Connection Failed..."
+
+'''Play Duration '''
+def playDuration(db, userList, isConnected):
+	#check that something is connected
+	if isConnected == True:
+		duration = []	#initialize list to store playDurations
+		index = 0	#index variable for returned list of playDurations
+
+		'''Duration of game play for all users in "userList" '''
+		#loop through list of users, we are interested in obtaining play duration
+		for users in userList:
+			#get the current collection of that users
+			coll = pymongo.collection.Collection(db, users.lower())
+
+			print "Currently looking at", users.lower()
+
+			#get all distinct SON time/date on that certain user -> sort
+			userTime = coll.distinct('Timestamp')
+			
+			if len(userTime) > 0:
+				userTime.sort()
+
+				#convert unix to local time
+				begin = userTime[1]
+				end = userTime[len(userTime)-1]
+
+				duration[index] = (end - begin) / 3600
+
+				#update variables and lists
+				index = index + 1
+				userTime[:] = []
+				print duration[index]
+		#returns the list of playDurations for userList
+		return duration
+	
+	else:
+		print "Not connected!"
+
+
+''' Zombie vs Space Game '''
+def gameDuration(db, userList, gameList, isConnected):
+	#initialize indexing variables and return lists
+	zombieIndex = 0
+	spaceIndex = 0
+	zombieDuration = []
+	spaceDuration = []
+
+	if isConnected == True:
+		for users in userList:
+			coll = pymongo.collection.Collection(db, users.lower())
+			print "Currently looking at", users.lower(), " to game play time"
+
+			#find zombie and Timestamp using collections and distinct
+			zombieGames = coll.find({"Tag" : "zombiegame"})
+			zombieTime = list(zombieGames.distinct('Timestamp'))
+			
+			#check if the user even played zombie game
+			if len(zombieTime) > 0: 
+				#sort time and get beginning and end
+				zombieTime.sort()
+				begin = zombieTime[0]
+				end = zombieTime[len(userTime)-1]
+
+				#calculate duration of game play in hours
+				zombieDuration[zombieIndex] = (end - begin) / 3600
+				print zombieDuration
+
+				#update variables and clear list
+				zombieTime[:] = []
+				zombieIndex = zombieIndex + 1
+
+			spaceGames = coll.find({"Tag" : "endlessgame"})
+			spaceTime = list(spaceGames.distinct('Timestamp'))
+			#check if user even played space games
+			if len(spaceTime) > 0:
+				#sort time and get beginning and end
+				spaceTime.sort()
+				begin = spaceTime[0]
+				end = spaceTime[len(userTime)-1]
+
+				#calculate duration of game play in hours
+				spaceDuration[spaceIndex] = (end - begin) / 3600
+				print spaceDuration
+
+				#update variables and clear list
+				spaceTime[:] = []
+				spaceIndex = spaceIndex + 1
+		#return both lists of game duration play
+		return zombieDuration, spaceDuration
+
+	else:
+		print "Not connected!"
